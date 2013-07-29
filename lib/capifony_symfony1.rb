@@ -8,6 +8,7 @@ load 'symfony1/propel'
 load 'symfony1/shared'
 load 'symfony1/symfony'
 load 'symfony1/web'
+load 'composer'
 
 require 'yaml'
 
@@ -35,6 +36,70 @@ set(:symfony_lib)       { guess_symfony_lib }
 # Shared symfony lib
 set :use_shared_symfony, false
 set :symfony_version,    "1.4.18"
+
+# Whether to use composer to install vendors.
+# If set to false, it will use the bin/vendors script
+set :use_composer,          false
+
+# Whether to use composer to install vendors to a local temp directory.
+set :use_composer_tmp,     false
+
+# Path to composer binary
+# If set to false, Capifony will download/install composer
+set :composer_bin,          false
+
+# Options to pass to composer when installing/updating
+set :composer_options,      "--no-dev --verbose --prefer-source --optimize-autoloader --no-progress"
+
+# If set to false, it will never ask for confirmations (migrations task for instance)
+# Use it carefully, really!
+set :interactive_mode,      true
+
+def remote_file_exists?(full_path)
+  'true' == capture("if [ -e #{full_path} ]; then echo 'true'; fi").strip
+end
+
+def capifony_pretty_print(msg)
+  if logger.level == Capistrano::Logger::IMPORTANT
+    pretty_errors
+
+    msg = msg.slice(0, 57)
+    msg << '.' * (60 - msg.size)
+    print msg
+  else
+    puts msg.green
+  end
+end
+
+def capifony_puts_ok
+  if logger.level == Capistrano::Logger::IMPORTANT && !$error
+    puts '✔'.green
+  end
+
+  $error = false
+end
+
+def pretty_errors
+  if !$pretty_errors_defined
+    $pretty_errors_defined = true
+
+    class << $stderr
+      @@firstLine = true
+      alias _write write
+
+      def write(s)
+        if @@firstLine
+          s = '✘' << "\n" << s
+          @@firstLine = false
+        end
+
+        _write(s.red)
+        $error = true
+      end
+    end
+  end
+end
+
 
 def guess_symfony_orm
   databases = YAML::load(IO.read('config/databases.yml'))
@@ -139,6 +204,9 @@ end
 
 # After finalizing update:
 after "deploy:finalize_update" do
+  if use_composer && !use_composer_tmp
+    symfony.composer.update
+  end
   if use_orm
     symfony.orm.setup                     # 1. Ensure that ORM is configured
     symfony.orm.build_classes             # 2. (Re)build the model

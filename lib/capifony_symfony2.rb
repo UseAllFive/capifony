@@ -15,6 +15,7 @@ module Capifony
 
         load_paths.push File.expand_path('../', __FILE__)
         load 'capifony'
+        load 'composer'
         load 'symfony2/symfony'
         load 'symfony2/database'
         load 'symfony2/deploy'
